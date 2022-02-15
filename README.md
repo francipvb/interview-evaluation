@@ -22,6 +22,22 @@ For completeness, I left space to you to write some unit tests for your own impl
 
 You'll gain bonus points if you reach 95% code coverage when testing the code. However, this is a minor requirement.
 
+## If you cannot start the project:
+
+Create a file called ".env" with this content:
+
+```bash
+PROJECT_NAME=testproject
+BACKEND_CORS_ORIGINS=["http://localhost:8000", "https://localhost:8000", "http://localhost", "https://localhost"]
+
+
+# These are not used, but you can use for the database connection:
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_SERVER=database
+POSTGRES_DB=app
+```
+
 ## License
 
 This project is licensed under the terms of the Apache license.
