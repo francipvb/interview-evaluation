@@ -1,24 +1,51 @@
 from typing import List
-
-from fastapi import APIRouter, Response
-
+from fastapi import APIRouter, Response, Depends, HTTPException, Security
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from .schemas import TodoItem, TodoPayload, User, UserPayload
+from passlib.context import CryptContext
+from sqlalchemy.orm import Session
+from app.database import SessionLocal
+from app import models
 
 router = APIRouter()
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+security = HTTPBasic()
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+def get_current_user(
+        credentials: HTTPBasicCredentials = Depends(security), 
+        db: Session = Depends(get_db)):
+    
+    user = db.query(models.User).filter(models.User.username == credentials.username).first()
+    if user is None or not verify_password(credentials.password, user.password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    return user
+
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
 
 
 @router.get("/items/", response_model=List[TodoItem])
-def get_items():
+def get_items(db: Session = Depends(get_db)):
     """Retrieve a persistent list of items."""
-    # TODO: Implement this
-    pass
-
+    items = db.query(models.TodoItem).all()
+    return items
 
 @router.get("/items/{id}", response_model=TodoItem)
-def get_item(id: int):
+def get_item(id: int, db: Session = Depends(get_db)):
     """Retrieve a particular item from the store."""
-    # TODO: Implement this.
-    pass
+    item = db.query(models.TodoItem).filter(models.TodoItem.id == id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return item
 
 
 @router.post(
@@ -27,61 +54,65 @@ def get_item(id: int):
     status_code=201,
     response_description="The item has been created successfully.",
 )
-def create_item(
-    payload: TodoPayload,
-):
+
+def create_item(payload: TodoPayload, 
+                user: User = Depends(get_current_user), 
+                db: Session = Depends(get_db)):
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
     """Add an item to the store."""
-
-    # TODO: Implement this.
-    # Requirements:
-    # * Ensure an user is authenticated with basic credentials.
-    # * Add the username to the item.
-    pass
-
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    item = models.TodoItem(**payload.dict(), username=user.username)
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
 
 @router.put("/items/{id}", response_model=TodoItem)
-def update_item(
-    id: int,
-    payload: TodoPayload,
-):
-    # TODO: Implement this.
-    # * Ensure the user is authenticated. If not, either return a 401 response
-    #   or raise an `HttpException` with a 401 code.
-    # * Ensure that the item is stored already in the datastore. If not, raise
-    #   an `HttpException` with a 404 code or return a 404 response.
-    # * Check the username matches the item's username. If not, return a 403
-    #   response or raise a `HttpException` with a 403 code.
-    # * Apply the update and save it to the database.
-    pass
+def update_item(id: int, 
+                payload: TodoPayload, 
+                user: User = Depends(get_current_user), 
+                db: Session = Depends(get_db)):
+    item = db.query(models.TodoItem).filter(models.TodoItem.id == id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    if item.username != user.username:
+        raise HTTPException(status_code=403, detail="Permission denied")
+    item.update_from_payload(payload)
+    db.commit()
+    db.refresh(item)
+    return item
 
+@router.delete("/items/{id}", 
+               response_class=Response, 
+               status_code=204)
+def remove_item(id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    item = db.query(models.TodoItem).filter(models.TodoItem.id == id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    if item.username != user.username:
+        raise HTTPException(status_code=403, detail="Permission denied")
+    db.delete(item)
+    db.commit()
 
-@router.delete("/items/{id}", response_class=Response, status_code=204)
-def remove_item(
-    id: int,
-):
-    # TODO: Implement this
-    # 1. Check that the item exists in the datastore.
-    # 2. Ensure the user is authenticated.
-    # 3. Check if the currently logged username matches.
-    # 4. Remove the item from the store.
-    pass
+@router.post("/users/", response_model=User)
+def create_user(payload: UserPayload, db: Session = Depends(get_db)):
+    hashed_password = hash_password(payload.password) 
+    user = models.User(
+        username=payload.username, 
+        password=hashed_password, 
+        name=payload.name,
+        email=payload.email
+    )
 
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
 
-@router.post("/users/")
-def create_user(payload: UserPayload):
-    # TODO: Implement this.
-    # 1. Validate the username has no uppercase letter, @ sign, nor
-    #   punctuations.
-    # 2. Hash the password and store the user in the data store.
-    pass
-
-
-# TODO: Document this endpoint
-@router.get("/users/me")
-def get_current_user():
-    # TODO: Implement this.
-    # 1. Get the credentials from the request.
-    # 2. Retrieve the user by it's username from the store.
-    # 3. Validate the password.
-    # 4. Return the user without the password hash.
-    pass
+@router.get("/users/me", response_model=User)
+def get_current_user(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user:
+        return current_user
+    raise HTTPException(status_code=401, detail="Authentication required")

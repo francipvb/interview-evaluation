@@ -3,6 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 
+app = FastAPI()
+print(settings.PROJECT_NAME)
+print(settings.BACKEND_CORS_ORIGINS)
+print(settings.POSTGRES_SERVER)
+print(settings.DATABASE_URI)
 
 def get_application():
     from .router import router
