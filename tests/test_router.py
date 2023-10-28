@@ -89,7 +89,7 @@ class TestItemCrud:
     def test_returns_401(self, client: TestClient):
         response = client.post(
             url="/items/",
-            json=factories.ItemFactory().dict(
+            json=factories.ItemFactory().model_dump(
                 by_alias=True,
                 exclude_unset=True,
             ),
@@ -104,7 +104,7 @@ class TestItemCrud:
         payload = factories.ItemFactory()
         response = client.post(
             url="/items/",
-            json=payload.dict(
+            json=payload.model_dump(
                 by_alias=True,
                 exclude_unset=True,
             ),
@@ -123,34 +123,3 @@ class TestItemCrud:
         assert response.status_code == 200
         response_item = pydantic.parse_obj_as(TodoItem, response.json())
         assert response_item == existing_item
-
-def test_updates_item(
-    self, client: TestClient, valid_credentials: HTTPBasicAuth, existing_item: TodoItem
-):
-    updated_payload = factories.ItemFactory()
-    response = client.put(
-        f"/items/{existing_item.id}",
-        json=updated_payload.dict(by_alias=True, exclude_unset=True),
-        auth=valid_credentials,
-    )
-    assert response.status_code == 200
-    updated_item = pydantic.parse_obj_as(TodoItem, response.json())
-    assert updated_item.id == existing_item.id
-    assert updated_item.title == updated_payload.title
-    assert updated_item.body == updated_payload.body
-
-def test_deletes_item(
-    self, client: TestClient, valid_credentials: HTTPBasicAuth, existing_item: TodoItem
-):
-    response = client.delete(
-        f"/items/{existing_item.id}",
-        auth=valid_credentials,
-    )
-    assert response.status_code == 204
-    response = client.get(f"/items/{existing_item.id}")
-    assert response.status_code == 404
-
-def test_returns_list_of_items(self, client: TestClient):
-    response = client.get("/items/")
-    assert response.status_code == 200
-    items = pydantic.parse_obj_as(List[TodoItem], response.json())

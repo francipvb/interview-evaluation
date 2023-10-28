@@ -29,10 +29,10 @@ class Settings(BaseSettings):
     def assemble_db_connection(cls, v: Optional[AnyUrl], values: Dict[str, Any]) -> Optional[AnyUrl]:
         if v is not None:
             return v
-        user = values.get("POSTGRES_USER")
-        password = values.get("POSTGRES_PASSWORD")
-        server = values.get("POSTGRES_SERVER")
-        db = values.get("POSTGRES_DB")
+        user = os.getenv("POSTGRES_USER")
+        password = os.getenv("POSTGRES_PASSWORD")
+        server = os.getenv("POSTGRES_SERVER")
+        db = os.getenv("POSTGRES_DB")
         if all([user, password, server, db]):
             db_url = f"postgresql://{user}:{password}@{server}/{db}"
             print("Constructed Database URL:", db_url) 

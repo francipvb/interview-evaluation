@@ -1,5 +1,5 @@
 from typing import List
-from fastapi import APIRouter, Response, Depends, HTTPException, Security
+from fastapi import APIRouter, Response, Depends, HTTPException, Security, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from .schemas import TodoItem, TodoPayload, User, UserPayload
 from passlib.context import CryptContext
@@ -60,14 +60,14 @@ def create_item(payload: TodoPayload,
                 db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
-    """Add an item to the store."""
-    if not user:
-        raise HTTPException(status_code=401, detail="Authentication required")
+    
     item = models.TodoItem(**payload.dict(), username=user.username)
     db.add(item)
     db.commit()
     db.refresh(item)
-    return item
+    pydantic_item = TodoItem(**item.__dict__)
+
+    return pydantic_item
 
 @router.put("/items/{id}", response_model=TodoItem)
 def update_item(id: int, 
@@ -82,7 +82,9 @@ def update_item(id: int,
     item.update_from_payload(payload)
     db.commit()
     db.refresh(item)
-    return item
+    pydantic_item = TodoItem(**item.__dict__)
+
+    return pydantic_item
 
 @router.delete("/items/{id}", 
                response_class=Response, 
@@ -96,7 +98,7 @@ def remove_item(id: int, user: User = Depends(get_current_user), db: Session = D
     db.delete(item)
     db.commit()
 
-@router.post("/users/", response_model=User)
+@router.post("/users/", response_model=User, status_code=status.HTTP_201_CREATED)
 def create_user(payload: UserPayload, db: Session = Depends(get_db)):
     hashed_password = hash_password(payload.password) 
     user = models.User(
@@ -112,7 +114,7 @@ def create_user(payload: UserPayload, db: Session = Depends(get_db)):
     return user
 
 @router.get("/users/me", response_model=User)
-def get_current_user(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_current_user_endpoint(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user:
         return current_user
     raise HTTPException(status_code=401, detail="Authentication required")
