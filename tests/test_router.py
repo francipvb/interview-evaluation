@@ -6,6 +6,8 @@ from fastapi.testclient import TestClient
 from requests.auth import HTTPBasicAuth
 from typing import List
 from . import factories
+from app.main import app
+from starlette.middleware.cors import CORSMiddleware
 
 @pytest.fixture()
 def fastapi_app():
@@ -141,3 +143,17 @@ def test_creates_todo_item(
     assert todo.id is not None
     assert not todo.completed
     assert todo.username == valid_credentials.username
+
+class TestMainModule:
+    def setup_class(cls):
+        cls.client = TestClient(app)
+
+    def test_get_application(self):
+        response = self.client.get("/")
+        assert response.status_code == 404  
+
+    def test_user_authentication(self):
+        pass
+
+    def test_cors_middleware(self):
+        pass

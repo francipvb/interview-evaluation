@@ -1,5 +1,5 @@
 from typing import List
-from fastapi import APIRouter, Response, Depends, HTTPException, Security, status
+from fastapi import APIRouter, Response, Depends, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from .schemas import TodoItem, TodoPayload, User, UserPayload
 from passlib.context import CryptContext
@@ -48,7 +48,6 @@ def get_item(id: int,
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
     return item
-
 
 @router.post(
     path="/items/",
