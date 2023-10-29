@@ -40,7 +40,9 @@ def get_items(db: Session = Depends(get_db)):
     return items
 
 @router.get("/items/{id}", response_model=TodoItem)
-def get_item(id: int, db: Session = Depends(get_db)):
+def get_item(id: int, 
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)):
     """Retrieve a particular item from the store."""
     item = db.query(models.TodoItem).filter(models.TodoItem.id == id).first()
     if not item:
@@ -61,7 +63,7 @@ def create_item(payload: TodoPayload,
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
     
-    item = models.TodoItem(**payload.dict(), username=user.username)
+    item = models.TodoItem(**payload.model_dump(), username=user.username)
     db.add(item)
     db.commit()
     db.refresh(item)
