@@ -4,9 +4,10 @@ from app.schemas import TodoItem, User, UserPayload
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from requests.auth import HTTPBasicAuth
-
+from typing import List
 from . import factories
-
+from app.main import app
+from starlette.middleware.cors import CORSMiddleware
 
 @pytest.fixture()
 def fastapi_app():
@@ -28,7 +29,7 @@ def valid_credentials(client: TestClient):
     payload: UserPayload = factories.UserFactory()
     response = client.post(
         url="/users/",
-        json=payload.dict(
+        json=payload.model_dump(
             by_alias=True,
             exclude_unset=True,
         ),
@@ -42,13 +43,15 @@ def invalid_credentials():
     payload = factories.UserFactory()
     return HTTPBasicAuth(payload.username, payload.password)
 
-
+@pytest.fixture
 def existing_item(client: TestClient, valid_credentials: HTTPBasicAuth):
     response = client.post(
         url="/items/",
-        json=factories.ItemFactory().dict(by_alias=True, exclude_unset=True),
+        json=factories.ItemFactory().model_dump(by_alias=True, exclude_unset=True),
+        auth=valid_credentials
     )
-    return pydantic.parse_obj_as(TodoItem, response.json())
+    return pydantic.TypeAdapter(TodoItem).validate_python(response.json())
+
 
 
 class TestAuthentication:
@@ -56,13 +59,13 @@ class TestAuthentication:
         payload: UserPayload = factories.UserFactory()
         response = client.post(
             url="/users/",
-            json=payload.dict(
+            json=payload.model_dump(
                 by_alias=True,
                 exclude_unset=True,
             ),
         )
         assert response.status_code == 201
-        user = pydantic.parse_obj_as(User, response.json())
+        user = pydantic.TypeAdapter(User).validate_python(response.json())
         assert user.username == payload.username
 
     def test_returns_valid_user(
@@ -72,7 +75,7 @@ class TestAuthentication:
     ):
         response = client.get("/users/me", auth=valid_credentials)
         assert response.status_code == 200
-        user = pydantic.parse_obj_as(User, response.json())
+        user = pydantic.TypeAdapter(User).validate_python(response.json())
         assert user.username == valid_credentials.username
 
     def test_returns_401_without_credentials(self, client: TestClient):
@@ -90,7 +93,7 @@ class TestItemCrud:
     def test_returns_401(self, client: TestClient):
         response = client.post(
             url="/items/",
-            json=factories.ItemFactory().dict(
+            json=factories.ItemFactory().model_dump(
                 by_alias=True,
                 exclude_unset=True,
             ),
@@ -105,24 +108,52 @@ class TestItemCrud:
         payload = factories.ItemFactory()
         response = client.post(
             url="/items/",
-            json=payload.dict(
+            json=payload.model_dump(
                 by_alias=True,
                 exclude_unset=True,
             ),
             auth=valid_credentials,
         )
         assert response.status_code == 201
-        todo = pydantic.parse_obj_as(TodoItem, response.json())
+        todo = pydantic.TypeAdapter(TodoItem).validate_python(response.json())
         assert todo.id is not None
         assert not todo.completed
         assert todo.username == valid_credentials.username
 
     def test_returns_the_item(
-        self, client: TestClient, existing_item: TodoItem
-    ):
-        response = client.get(f"/items/{existing_item.id}")
+        self, client: TestClient, existing_item: TodoItem, valid_credentials: HTTPBasicAuth):
+        response = client.get(f"/items/{existing_item.id}", auth=valid_credentials)
+
         assert response.status_code == 200
-        response_item = pydantic.parse_obj_as(TodoItem, response.json())
+        response_item = pydantic.TypeAdapter(TodoItem).validate_python(response.json())
         assert response_item == existing_item
 
-    # TODO: Add missing tests
+def test_creates_todo_item(
+    client: TestClient,
+    valid_credentials: HTTPBasicAuth,
+):
+    payload = factories.ItemFactory()
+    response = client.post(
+        url="/items/",
+        json=payload.model_dump(by_alias=True, exclude_unset=True),
+        auth=valid_credentials,  # Provide valid credentials
+    )
+    assert response.status_code == 201
+    todo = pydantic.TypeAdapter(TodoItem).validate_python(response.json())
+    assert todo.id is not None
+    assert not todo.completed
+    assert todo.username == valid_credentials.username
+
+class TestMainModule:
+    def setup_class(cls):
+        cls.client = TestClient(app)
+
+    def test_get_application(self):
+        response = self.client.get("/")
+        assert response.status_code == 404  
+
+    def test_user_authentication(self):
+        pass
+
+    def test_cors_middleware(self):
+        pass
